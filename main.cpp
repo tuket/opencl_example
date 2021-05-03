@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#define CL_TARGET_OPENCL_VERSION 120
 #include <CL/cl.h>
 #include <stdint.h>
+#include <inttypes.h>
+#include <time.h>
 
 typedef int64_t i64;
 
@@ -93,23 +96,31 @@ static void printErrorCode()
 
 }
 
+static void printETA(clock_t t)
+{
+	i64 seconds = t / CLOCKS_PER_SEC;
+	i64 minutes = seconds / 60;
+	seconds = seconds % 60;
+	printf("ETA: %" PRId64 " minutes, %" PRId64 " seconds\n", minutes, seconds);
+}
+
 constexpr i64 NANO = 1'000'000'000;
 constexpr i64 NT = 60 * 60 * 12;
 constexpr i64 N = NANO * NT;
-constexpr i64 perThread = 1000; // how many iterations we will do in each work-item
-constexpr i64 perIteration = 10'000'000;
+constexpr i64 perThread = 100'000; // how many iterations we will do in each work-item
+constexpr i64 numThreads = 10'000;
+constexpr i64 perIteration = perThread * numThreads;
 //constexpr i64 iterations = N / perIteration;
-constexpr i64 numThreads = perIteration / perThread;
 
 const char* kernelCode =
 R"CL(
 #define NANO ((long)1000000000)
-__kernel void search(__global long* out, long offset, long n)
+__kernel void search(__global long* out, long offset, long perThread)
 {
 	size_t id = get_global_id(0);
 	out[id] = 0;
-	long startRange = offset + id * n;
-	long endRange = startRange + n;
+	long startRange = offset + id * perThread;
+	long endRange = startRange + perThread;
 	for(long i = startRange; i <  endRange; i++) {
 		if((11 * i) % (NANO * 60*60*12) == 1) {
 			out[id] = i;
@@ -125,7 +136,7 @@ int main()
 	cl_platform_id platformIds[MAX_PLATFORMS];
 	clGetPlatformIDs(MAX_PLATFORMS, platformIds, &numPlatforms);
 
-	//printPlatformsAndDevicesInfo(numPlatforms, platformIds);
+	printPlatformsAndDevicesInfo(numPlatforms, platformIds);
 
 	cl_platform_id bestGpuPlatform = nullptr;
 	cl_device_id bestGpuDevice = nullptr;
@@ -174,23 +185,28 @@ int main()
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &resultBuffer);
 	clSetKernelArg(kernel, 2, sizeof(cl_long), &perThread);
 
+	const clock_t startT = clock();
+
 	cl_long percent = 0;
 	for (cl_long i = 0; i < N / perIteration; i++)
 	{
 		cl_long offset = i * perIteration;
 		cl_long newPercent = (100 * offset) / N;
 		if (newPercent > percent) {
-			printf("%lld%%\n", newPercent);
+			printf("%" PRId64 "%%\n", newPercent);
+			const clock_t elapsedT = clock() - startT;
+			const clock_t eta = elapsedT * (100 - newPercent) / newPercent;
+			printETA(eta);
 			percent = newPercent;
 		}
 		clSetKernelArg(kernel, 1, sizeof(cl_long), &offset);
-		static const size_t spaceSize[1] = {perIteration};
+		static const size_t spaceSize[1] = {numThreads};
 		status = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, nullptr, spaceSize, nullptr, 0, nullptr, nullptr);
 		clEnqueueReadBuffer(cmdQueue, resultBuffer, CL_TRUE, 0, sizeof(i64) * numThreads, result, 0, nullptr, nullptr);
 		bool found = false;
 		for (int i = 0; i < numThreads; i++) {
 			if (result[i]) {
-				printf("RESULT: %lld\n", result[i]);
+				printf("RESULT: %" PRId64 "\n", result[i]);
 				found = true;
 				break;
 			}
