@@ -6,8 +6,12 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <time.h>
+#include <assert.h>
 
 typedef int64_t i64;
+typedef uint64_t u64;
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 static void printDeviceInfo(cl_device_id device, const char* indent)
 {
@@ -85,7 +89,7 @@ static const char* strstri(const char* container, const char* contained)
 			if (a != b)
 				break;
 		}
-		if (i == containedLen)
+		if (j == containedLen)
 			return contained + i;
 	}
 	return nullptr;
@@ -100,17 +104,19 @@ static void printETA(clock_t t)
 {
 	i64 seconds = t / CLOCKS_PER_SEC;
 	i64 minutes = seconds / 60;
-	seconds = seconds % 60;
-	printf("ETA: %" PRId64 " minutes, %" PRId64 " seconds\n", minutes, seconds);
+	i64 hours = minutes / 60;
+	minutes %= 60;
+	seconds %= 60;
+	printf("ETA: %" PRId64 "hours, %" PRId64 " minutes, %" PRId64 " seconds\n", hours, minutes, seconds);
 }
 
 constexpr i64 NANO = 1'000'000'000;
 constexpr i64 NT = 60 * 60 * 12;
 constexpr i64 N = NANO * NT;
-constexpr i64 perThread = 100'000; // how many iterations we will do in each work-item
+constexpr i64 perThread = 1'000'000; // how many iterations we will do in each work-item
 constexpr i64 numThreads = 10'000;
 constexpr i64 perIteration = perThread * numThreads;
-//constexpr i64 iterations = N / perIteration;
+constexpr i64 numIterations = N / perIteration;
 
 const char* kernelCode =
 R"CL(
@@ -130,7 +136,53 @@ __kernel void search(__global long* out, long offset, long perThread)
 }
 )CL";
 
-int main()
+#include <intrin.h>
+static void multiply(i64& out0, i64& out1, i64 in0, i64 in1)
+{
+	out1 = _mul128(in0, in1, &out0);
+}
+
+static i64 divide(i64 a0, i64 a1, i64 b) // return (a0 << 64 | a0) / b
+{
+	i64 remainder;
+	return _div128(a0, a1, b, &remainder);
+}
+
+static void calcElapsedAndPrintETA(clock_t startT, i64 done, i64 total)
+{
+	const clock_t elapsedT = clock() - startT;
+	i64 eta0, eta1;
+	multiply(eta0, eta1, elapsedT, total - done);
+	const clock_t eta = divide(eta0, eta1, done);
+	printETA(eta);
+}
+
+i64 calcWithCpu()
+{
+	constexpr i64 batch = 1'000'000'000;
+	const clock_t startT = clock();
+	i64 percent = 0;
+	for (i64 i = 0; i < N;) {
+		const i64 newPercent = (i64(10000) * i) / N;
+		if (newPercent != percent) {
+			printf("%" PRId64 ".%" PRId64 "%%\n", newPercent / 100, newPercent % 100);
+			percent = newPercent;
+			
+		}
+		if (i != 0) {
+			calcElapsedAndPrintETA(startT, i, N);
+		}
+
+		i64 n = MIN(i + batch, N);
+		for(; i < n; i++)
+		if ((i64(11) * i) % N == 1)
+			return i;
+	}
+	assert(false);
+	return 0;
+}
+
+i64 calcWithOpenCl()
 {
 	cl_uint numPlatforms;
 	cl_platform_id platformIds[MAX_PLATFORMS];
@@ -143,7 +195,7 @@ int main()
 	for (int platformInd = 0; platformInd < numPlatforms; platformInd++) {
 		cl_uint numGpuDevices = 0;
 		cl_device_id gpuDevices[MAX_DEVICES];
-		clGetDeviceIDs(platformIds[platformInd], CL_DEVICE_TYPE_GPU, MAX_DEVICES, gpuDevices, &numGpuDevices);
+		clGetDeviceIDs(platformIds[platformInd], CL_DEVICE_TYPE_CPU, MAX_DEVICES, gpuDevices, &numGpuDevices);
 		for (int i = 0; i < numGpuDevices; i++) {
 			constexpr int BUFFER_SIZE = 256;
 			char buffer[BUFFER_SIZE];
@@ -188,31 +240,33 @@ int main()
 	const clock_t startT = clock();
 
 	cl_long percent = 0;
-	for (cl_long i = 0; i < N / perIteration; i++)
+	for (cl_long i = 0; i < numIterations; i++)
 	{
 		cl_long offset = i * perIteration;
-		cl_long newPercent = (100 * offset) / N;
+		cl_long newPercent = (10000 * offset) / N;
 		if (newPercent > percent) {
-			printf("%" PRId64 "%%\n", newPercent);
-			const clock_t elapsedT = clock() - startT;
-			const clock_t eta = elapsedT * (100 - newPercent) / newPercent;
-			printETA(eta);
+			printf("%" PRId64 ".%" PRId64 "%%\n", newPercent / 100, newPercent % 100);
 			percent = newPercent;
+			calcElapsedAndPrintETA(startT, i, numIterations);
 		}
 		clSetKernelArg(kernel, 1, sizeof(cl_long), &offset);
 		static const size_t spaceSize[1] = {numThreads};
 		status = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, nullptr, spaceSize, nullptr, 0, nullptr, nullptr);
 		clEnqueueReadBuffer(cmdQueue, resultBuffer, CL_TRUE, 0, sizeof(i64) * numThreads, result, 0, nullptr, nullptr);
-		bool found = false;
 		for (int i = 0; i < numThreads; i++) {
-			if (result[i]) {
-				printf("RESULT: %" PRId64 "\n", result[i]);
-				found = true;
-				break;
-			}
+			if (result[i])
+				return result[i];
 		}
-		if (found)
-			break;
 	}
 
+	assert(false);
+	return 0;
+}
+
+int main()
+{
+	i64 res =
+		//calcWithCpu();
+		calcWithOpenCl();
+	printf("RESULT: %" PRId64 "\n", res);
 }
