@@ -144,30 +144,6 @@ __kernel void search(__global long* out, long offset, long perThread)
 }
 )CL";
 
-#ifdef WIN32
-	#include <intrin.h>
-#endif
-static void multiply(i64& out0, i64& out1, i64 in0, i64 in1)
-{
-	#ifdef WIN32
-		out1 = _mul128(in0, in1, &out0);
-	#else
-		const __int128 m = __int128(in0) * __int128(in1);
-		out0 = m >> __int128(64);
-		out1 = m & 0xFFFF'FFFF'FFFF'FFFF;
-	#endif
-}
-
-static i64 divide(i64 a0, i64 a1, i64 b) // return (a0 << 64 | a0) / b
-{
-	#ifdef _WIN32
-		i64 remainder;
-		return _div128(a0, a1, b, &remainder);
-	#else
-		return ((__int128(a0) << 64) | __int128(a1)) / __int128(b);
-	#endif
-}
-
 static double getTime()
 {
 	timespec t;
