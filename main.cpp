@@ -13,6 +13,58 @@ typedef uint64_t u64;
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
+constexpr i64 NANO = 1'000'000'000;
+constexpr i64 NT = 60 * 60 * 12;
+constexpr i64 N = NANO * NT;
+constexpr i64 perThread = 1'000'000; // how many iterations we will do in each work-item
+constexpr i64 numThreads = 10'000;
+constexpr i64 perIteration = perThread * numThreads;
+constexpr i64 numIterations = N / perIteration;
+
+static const char* strstri(const char* container, const char* contained)
+{
+	const int containerLen = strlen(container);
+	const int containedLen = strlen(contained);
+	for (int i = 0; i + containedLen - 1 < containerLen; i++) {
+		int j;
+		for (j = 0; j < containedLen; j++) {
+			const char a = tolower(container[i + j]);
+			const char b = tolower(contained[j]);
+			if (a != b)
+				break;
+		}
+		if (j == containedLen)
+			return contained + i;
+	}
+	return nullptr;
+}
+
+static double getTime()
+{
+	timespec t;
+	clock_gettime(CLOCK_REALTIME, &t);
+	return t.tv_sec + 1e-9*t.tv_nsec;
+}
+
+static void printETA(double t)
+{
+	i64 seconds = t;
+	i64 minutes = seconds / 60;
+	i64 hours = minutes / 60;
+	minutes %= 60;
+	seconds %= 60;
+	printf("ETA: %" PRId64 "hours, %" PRId64 " minutes, %" PRId64 " seconds\n", hours, minutes, seconds);
+}
+
+
+static void calcElapsedAndPrintETA(double startT, i64 done, i64 total)
+{
+	const double nowT = getTime();
+	const double elapsedT = nowT - startT;
+	const double eta = elapsedT * (total - done) / done;
+	printETA(eta);
+}
+
 static void printDeviceInfo(cl_device_id device, const char* indent)
 {
 	char queryBuffer[1024];
@@ -77,24 +129,6 @@ static void printPlatformsAndDevicesInfo(cl_uint numPlatforms, const cl_platform
 	}
 }
 
-static const char* strstri(const char* container, const char* contained)
-{
-	const int containerLen = strlen(container);
-	const int containedLen = strlen(contained);
-	for (int i = 0; i + containedLen - 1 < containerLen; i++) {
-		int j;
-		for (j = 0; j < containedLen; j++) {
-			const char a = tolower(container[i + j]);
-			const char b = tolower(contained[j]);
-			if (a != b)
-				break;
-		}
-		if (j == containedLen)
-			return contained + i;
-	}
-	return nullptr;
-}
-
 static const char* errorToStr(cl_int err)
 {
 	switch(err)
@@ -107,59 +141,8 @@ static const char* errorToStr(cl_int err)
 	return "[?]";
 }
 
-static void printETA(double t)
-{
-	i64 seconds = t;
-	i64 minutes = seconds / 60;
-	i64 hours = minutes / 60;
-	minutes %= 60;
-	seconds %= 60;
-	printf("ETA: %" PRId64 "hours, %" PRId64 " minutes, %" PRId64 " seconds\n", hours, minutes, seconds);
-	//printf("ETA: %lld hours, %lld minutes, %lld seconds\n", hours, minutes, seconds);
-}
-
-constexpr i64 NANO = 1'000'000'000;
-constexpr i64 NT = 60 * 60 * 12;
-constexpr i64 N = NANO * NT;
-constexpr i64 perThread = 1'000'000; // how many iterations we will do in each work-item
-constexpr i64 numThreads = 10'000;
-constexpr i64 perIteration = perThread * numThreads;
-constexpr i64 numIterations = N / perIteration;
-
-const char* kernelCode =
-R"CL(
-#define NANO ((long)1000000000)
-__kernel void search(__global long* out, long offset, long perThread)
-{
-	size_t id = get_global_id(0);
-	out[id] = 0;
-	long startRange = offset + id * perThread;
-	long endRange = startRange + perThread;
-	for(long i = startRange; i <  endRange; i++) {
-		if((11 * i) % (NANO * 60*60*12) == 1) {
-			out[id] = i;
-			break;
-		}
-	}
-}
-)CL";
-
-static double getTime()
-{
-	timespec t;
-	clock_gettime(CLOCK_REALTIME, &t);
-	return t.tv_sec + 1e-9*t.tv_nsec;
-}
-
-static void calcElapsedAndPrintETA(double startT, i64 done, i64 total)
-{
-	const double nowT = getTime();
-	const double elapsedT = nowT - startT;
-	const double eta = elapsedT * (total - done) / done;
-	printETA(eta);
-}
-
-i64 calcWithCpu()
+// --- CPU implementation single threaded ---
+static i64 calcWithCpu()
 {
 	constexpr i64 batch = 1'000'000'000;
 	const double startT = getTime();
@@ -183,6 +166,26 @@ i64 calcWithCpu()
 	assert(false);
 	return 0;
 }
+
+// --- OpenCL implementation ---
+
+const char* kernelCode =
+R"CL(
+#define NANO ((long)1000000000)
+__kernel void search(__global long* out, long offset, long perThread)
+{
+	size_t id = get_global_id(0);
+	out[id] = 0;
+	long startRange = offset + id * perThread;
+	long endRange = startRange + perThread;
+	for(long i = startRange; i <  endRange; i++) {
+		if((11 * i) % (NANO * 60*60*12) == 1) {
+			out[id] = i;
+			break;
+		}
+	}
+}
+)CL";
 
 i64 calcWithOpenCl()
 {
@@ -265,6 +268,12 @@ i64 calcWithOpenCl()
 
 	assert(false);
 	return 0;
+}
+
+// --- Vulkan implementation ---
+static i64 calcWithVulkan()
+{
+	
 }
 
 int main()
