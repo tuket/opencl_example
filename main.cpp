@@ -7,7 +7,10 @@
 #include <inttypes.h>
 #include <time.h>
 #include <assert.h>
+#include <vulkan/vulkan.h>
 
+typedef int32_t i32;
+typedef uint32_t u32;
 typedef int64_t i64;
 typedef uint64_t u64;
 
@@ -271,15 +274,201 @@ i64 calcWithOpenCl()
 }
 
 // --- Vulkan implementation ---
+static void printPhysicalDeviceProps(VkPhysicalDeviceProperties props)
+{
+	printf("device name: %s\n", props.deviceName);
+}
+static void printPhysicalDeviceProps(VkPhysicalDevice gpu)
+{
+	VkPhysicalDeviceProperties props;
+	vkGetPhysicalDeviceProperties(gpu, &props);
+	printPhysicalDeviceProps(props);
+}
+
+static void printMemoryProps(const VkPhysicalDeviceMemoryProperties& memProps)
+{
+	printf("Memory Types:\n");
+	for(int i = 0; i < memProps.memoryTypeCount; i++) {
+		auto& t = memProps.memoryTypes[i];
+		printf("%d)\n", i);
+		printf("  Heap index: %d\n", t.heapIndex);
+		printf("  Flags:");
+		if(t.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+			printf(" VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |");
+		if(t.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+			printf(" VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |");
+		if(t.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+			printf(" VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |");
+		if(t.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
+			printf(" VK_MEMORY_PROPERTY_HOST_CACHED_BIT |");
+		if(t.propertyFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT)
+			printf(" VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT |");
+		if(t.propertyFlags & VK_MEMORY_PROPERTY_PROTECTED_BIT)
+			printf(" VK_MEMORY_PROPERTY_PROTECTED_BIT |");
+			
+		printf("\n");
+	}
+
+	printf("\nMemory Heaps:\n");
+	for(int i = 0; i < memProps.memoryHeapCount; i++) {
+		auto& heap = memProps.memoryHeaps[i];
+		printf("%d)\n", i);
+		printf("  Size: %" PRIu64 "MB\n", heap.size / (1024 * 1024));
+		printf("  Flags:");
+		if(heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+			printf(" VK_MEMORY_HEAP_DEVICE_LOCAL_BIT");
+		printf("\n");
+	}
+}
+
 static i64 calcWithVulkan()
 {
+	constexpr u32 MAX_LAYERS = 32;
+	VkLayerProperties layersProps[MAX_LAYERS];
+	u32 numLayers = MAX_LAYERS;
+	vkEnumerateInstanceLayerProperties(&numLayers, layersProps);
+	printf("Available Layers\n");
+	for(u32 i = 0; i < numLayers; i++) {
+		printf("%s: %s\n", layersProps[i].layerName, layersProps[i].description);
+	}
+
+	VkApplicationInfo appInfo = {};
+	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	appInfo.pApplicationName = "example";
+	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+	appInfo.pEngineName = "none";
+	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+	appInfo.apiVersion = VK_API_VERSION_1_0;
+
+	VkInstanceCreateInfo instanceCreateInfo = {};
+	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	instanceCreateInfo.pApplicationInfo = &appInfo;
+	instanceCreateInfo.enabledLayerCount = 1;
+	static const char* const LAYER_NAMES[] = {"VK_LAYER_KHRONOS_validation"};
+	instanceCreateInfo.ppEnabledLayerNames = LAYER_NAMES;
+	VkInstance inst;
+	VkResult result = vkCreateInstance(&instanceCreateInfo, nullptr, &inst);
+
+	if(result != VK_SUCCESS) {
+		printf("Error creating Vulkan instance\n");
+		return 0;
+	}
+
+	constexpr u32 MAX_PHYSICAL_DEVICES = 4;
+	VkPhysicalDevice physicalDevices[MAX_PHYSICAL_DEVICES];
+	u32 numPhysicalDevices = MAX_PHYSICAL_DEVICES;
+	vkEnumeratePhysicalDevices(inst, &numPhysicalDevices, physicalDevices);
+	assert(numPhysicalDevices > 0);
+
+	VkPhysicalDevice bestGpu = nullptr;
+	for(u32 i = 0; i < numPhysicalDevices; i++) {
+		VkPhysicalDeviceProperties props;
+		vkGetPhysicalDeviceProperties(physicalDevices[i], &props);
+		//printPhyiscalDeviceProps(props);
+		if(!bestGpu || strstri(props.deviceName, "geforce"))
+			bestGpu = physicalDevices[i];
+	}
+	printf("best GPU: ");
+	printPhysicalDeviceProps(bestGpu);
+
+	constexpr u32 MAX_QUEUE_FAMILIES = 8;
+	VkQueueFamilyProperties queueFamiles[MAX_QUEUE_FAMILIES];
+	u32 numQueueFamilies = MAX_QUEUE_FAMILIES;
+	vkGetPhysicalDeviceQueueFamilyProperties(bestGpu, &numQueueFamilies, queueFamiles);
+	printf("numQueueFamilies: %d\n", numQueueFamilies);
+	for(int i = 0; i < numQueueFamilies; i++) {
+		printf("%d)\n", i);
+		printf("flags: ");
+		if(queueFamiles[i].queueFlags | VK_QUEUE_COMPUTE_BIT)
+			printf("COMPUTE | ");
+		if(queueFamiles[i].queueFlags | VK_QUEUE_GRAPHICS_BIT)
+			printf("GRAPHICS | ");
+		if(queueFamiles[i].queueFlags | VK_QUEUE_TRANSFER_BIT)
+			printf("TRANSFER | ");
+		if(queueFamiles[i].queueFlags | VK_QUEUE_SPARSE_BINDING_BIT)
+			printf("SPARSE_BINDING | ");
+			
+		printf("\n");
+		printf("queueCount: %d\n", queueFamiles[i].queueCount);
+	}
+	u32 bestQueueFamilyInd = -1;
+	for(u32 i = 0; i < numQueueFamilies; i++) {
+		if( (queueFamiles[i].queueFlags | VK_QUEUE_COMPUTE_BIT) &&
+			(
+				bestQueueFamilyInd == -1 ||
+				queueFamiles[i].queueCount > queueFamiles[bestQueueFamilyInd].queueCount
+			)
+		) {
+			bestQueueFamilyInd = i;
+		}
+	}
+
+	const float queuePriorities[] = {0};
+	VkDeviceQueueCreateInfo queueCreateInfo = {};
+	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queueCreateInfo.queueCount = 1;
+	queueCreateInfo.queueFamilyIndex = bestQueueFamilyInd;
+	queueCreateInfo.pQueuePriorities = queuePriorities;
+
+	VkPhysicalDeviceFeatures gpuFeatures;
+	vkGetPhysicalDeviceFeatures(bestGpu, &gpuFeatures);
+	if(!gpuFeatures.shaderInt64) {
+		printf("Error: 64 bit integer not supported\n");
+		return 0;
+	}
+	memset(&gpuFeatures, 0, sizeof(gpuFeatures));
+	gpuFeatures.shaderInt64 = VK_TRUE;
 	
+	VkDeviceCreateInfo deviceCreateInfo = {};
+	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	deviceCreateInfo.queueCreateInfoCount = 1;
+	deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
+	deviceCreateInfo.pEnabledFeatures = &gpuFeatures;
+	VkDevice device;
+	vkCreateDevice(bestGpu, &deviceCreateInfo, nullptr, &device);
+
+	VkPhysicalDeviceMemoryProperties memProps;
+	vkGetPhysicalDeviceMemoryProperties(bestGpu, &memProps);
+	printMemoryProps(memProps);
+
+	VkBufferCreateInfo bufferCreateInfo = {};
+	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferCreateInfo.size = sizeof(i64) * numThreads;
+	bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	VkBuffer buffer;
+	vkCreateBuffer(device, &bufferCreateInfo, nullptr, &buffer);
+
+	VkMemoryRequirements bufferMemReqs;
+	vkGetBufferMemoryRequirements(device, buffer, &bufferMemReqs);
+
+	VkDeviceMemory bufferMem = nullptr;
+	//VkMemoryPropertyFlagBits memPropFlags;
+	VkMemoryAllocateInfo allocInfo;
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = bufferMemReqs.size;
+	for(u32 i = 0; i < memProps.memoryTypeCount; i++) {
+		const VkMemoryPropertyFlags typeFlags = memProps.memoryTypes[i].propertyFlags;
+		if(typeFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+			allocInfo.memoryTypeIndex = i;
+			break;
+		}
+	}
+	vkAllocateMemory(device, &allocInfo, nullptr, &bufferMem);
+	assert(bufferMem && "Error allocating memory");
+	vkBindBufferMemory(device, buffer, bufferMem, 0);
+
+
+
+
+	return 0;
 }
 
 int main()
 {
 	i64 res =
 		//calcWithCpu();
-		calcWithOpenCl();
+		//calcWithOpenCl();
+		calcWithVulkan();
 	printf("RESULT: %" PRId64 "\n", res);
 }
