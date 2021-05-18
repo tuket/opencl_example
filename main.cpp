@@ -24,13 +24,15 @@ constexpr i64 numThreads = 10'000;
 constexpr i64 perIteration = perThread * numThreads;
 constexpr i64 numIterations = N / perIteration;
 
-static const char* strstri(const char* container, const char* contained)
+static const char *strstri(const char *container, const char *contained)
 {
 	const int containerLen = strlen(container);
 	const int containedLen = strlen(contained);
-	for (int i = 0; i + containedLen - 1 < containerLen; i++) {
+	for (int i = 0; i + containedLen - 1 < containerLen; i++)
+	{
 		int j;
-		for (j = 0; j < containedLen; j++) {
+		for (j = 0; j < containedLen; j++)
+		{
 			const char a = tolower(container[i + j]);
 			const char b = tolower(contained[j]);
 			if (a != b)
@@ -46,7 +48,7 @@ static double getTime()
 {
 	timespec t;
 	clock_gettime(CLOCK_REALTIME, &t);
-	return t.tv_sec + 1e-9*t.tv_nsec;
+	return t.tv_sec + 1e-9 * t.tv_nsec;
 }
 
 static void printETA(double t)
@@ -59,7 +61,6 @@ static void printETA(double t)
 	printf("ETA: %" PRId64 "hours, %" PRId64 " minutes, %" PRId64 " seconds\n", hours, minutes, seconds);
 }
 
-
 static void calcElapsedAndPrintETA(double startT, i64 done, i64 total)
 {
 	const double nowT = getTime();
@@ -68,7 +69,7 @@ static void calcElapsedAndPrintETA(double startT, i64 done, i64 total)
 	printETA(eta);
 }
 
-static void printDeviceInfo(cl_device_id device, const char* indent)
+static void printDeviceInfo(cl_device_id device, const char *indent)
 {
 	char queryBuffer[1024];
 	int queryInt;
@@ -89,7 +90,7 @@ static void printDeviceInfo(cl_device_id device, const char* indent)
 	printf("%sCL_DEVICE_MAX_COMPUTE_UNITS: %d\n", indent, queryInt);
 }
 
-static void printPlatformInfo(cl_platform_id p, const char* indent)
+static void printPlatformInfo(cl_platform_id p, const char *indent)
 {
 	constexpr int BUFFER_SIZE = 4 * 1024;
 	char buffer[BUFFER_SIZE];
@@ -105,26 +106,27 @@ static void printPlatformInfo(cl_platform_id p, const char* indent)
 	printf("%sextensions:\n %s\n", indent, buffer);
 }
 
-static void errorCallbackCL(const char* errInfo, const void* privateInfo, size_t privateInfoSize, void* userData)
+static void errorCallbackCL(const char *errInfo, const void *privateInfo, size_t privateInfoSize, void *userData)
 {
-
 }
 
 constexpr cl_uint MAX_PLATFORMS = 8;
 constexpr cl_uint MAX_DEVICES = 8;
 
-static void printPlatformsAndDevicesInfo(cl_uint numPlatforms, const cl_platform_id* platformIds)
+static void printPlatformsAndDevicesInfo(cl_uint numPlatforms, const cl_platform_id *platformIds)
 {
 
 	printf("numPlatforms: %d\n", numPlatforms);
-	for (cl_uint i = 0; i < numPlatforms; i++) {
+	for (cl_uint i = 0; i < numPlatforms; i++)
+	{
 		printf("platform %d\n", i);
 		printPlatformInfo(platformIds[i], "  ");
 		cl_uint numDevices;
 		cl_device_id deviceIds[MAX_DEVICES];
 		clGetDeviceIDs(platformIds[i], CL_DEVICE_TYPE_ALL, MAX_DEVICES, deviceIds, &numDevices);
 		printf("  devices:\n");
-		for (int j = 0; j < numDevices; j++) {
+		for (int j = 0; j < numDevices; j++)
+		{
 			printf("    device %d:", j);
 			printDeviceInfo(deviceIds[j], "    ");
 		}
@@ -132,14 +134,18 @@ static void printPlatformsAndDevicesInfo(cl_uint numPlatforms, const cl_platform
 	}
 }
 
-static const char* errorToStr(cl_int err)
+static const char *errorToStr(cl_int err)
 {
-	switch(err)
+	switch (err)
 	{
-		case CL_INVALID_CONTEXT: return "CL_INVALID_CONTEXT";
-		case CL_INVALID_VALUE: return "CL_INVALID_VALUE";
-		case CL_OUT_OF_RESOURCES: return "CL_OUT_OF_RESOURCES";
-		case CL_OUT_OF_HOST_MEMORY: return "CL_OUT_OF_HOST_MEMORY";
+	case CL_INVALID_CONTEXT:
+		return "CL_INVALID_CONTEXT";
+	case CL_INVALID_VALUE:
+		return "CL_INVALID_VALUE";
+	case CL_OUT_OF_RESOURCES:
+		return "CL_OUT_OF_RESOURCES";
+	case CL_OUT_OF_HOST_MEMORY:
+		return "CL_OUT_OF_HOST_MEMORY";
 	}
 	return "[?]";
 }
@@ -150,21 +156,23 @@ static i64 calcWithCpu()
 	constexpr i64 batch = 1'000'000'000;
 	const double startT = getTime();
 	i64 percent = 0;
-	for (i64 i = 0; i < N;) {
+	for (i64 i = 0; i < N;)
+	{
 		const i64 newPercent = (i64(10000) * i) / N;
-		if (newPercent != percent) {
+		if (newPercent != percent)
+		{
 			printf("%" PRId64 ".%" PRId64 "%%\n", newPercent / 100, newPercent % 100);
 			percent = newPercent;
-			
 		}
-		if (i != 0) {
+		if (i != 0)
+		{
 			calcElapsedAndPrintETA(startT, i, N);
 		}
 
 		i64 n = MIN(i + batch, N);
-		for(; i < n; i++)
-		if ((i64(11) * i) % N == 1)
-			return i;
+		for (; i < n; i++)
+			if ((i64(11) * i) % N == 1)
+				return i;
 	}
 	assert(false);
 	return 0;
@@ -172,8 +180,8 @@ static i64 calcWithCpu()
 
 // --- OpenCL implementation ---
 
-const char* kernelCode =
-R"CL(
+const char *kernelCode =
+	R"CL(
 #define NANO ((long)1000000000)
 __kernel void search(__global long* out, long offset, long perThread)
 {
@@ -200,15 +208,18 @@ i64 calcWithOpenCl()
 
 	cl_platform_id bestGpuPlatform = nullptr;
 	cl_device_id bestGpuDevice = nullptr;
-	for (int platformInd = 0; platformInd < numPlatforms; platformInd++) {
+	for (int platformInd = 0; platformInd < numPlatforms; platformInd++)
+	{
 		cl_uint numGpuDevices = 0;
 		cl_device_id gpuDevices[MAX_DEVICES];
 		clGetDeviceIDs(platformIds[platformInd], CL_DEVICE_TYPE_GPU, MAX_DEVICES, gpuDevices, &numGpuDevices);
-		for (int i = 0; i < numGpuDevices; i++) {
+		for (int i = 0; i < numGpuDevices; i++)
+		{
 			constexpr int BUFFER_SIZE = 256;
 			char buffer[BUFFER_SIZE];
 			clGetDeviceInfo(gpuDevices[i], CL_DEVICE_NAME, BUFFER_SIZE, &buffer, 0);
-			if (bestGpuDevice == nullptr || strstri(buffer, "nvidia")) {
+			if (bestGpuDevice == nullptr || strstri(buffer, "nvidia"))
+			{
 				bestGpuDevice = gpuDevices[i];
 				bestGpuPlatform = platformIds[platformInd];
 			}
@@ -221,17 +232,20 @@ i64 calcWithOpenCl()
 	const cl_context clCtx = clCreateContext(ctxProps, 1, &bestGpuDevice, errorCallbackCL, nullptr, &errorCode);
 
 	const cl_command_queue cmdQueue = clCreateCommandQueue(clCtx, bestGpuDevice, 0, &errorCode);
-	i64* result = new i64[numThreads];
+	i64 *result = new i64[numThreads];
 	//memset(result, 0, sizeof(i64) * perIteration);
 	const cl_mem resultBuffer = clCreateBuffer(clCtx, CL_MEM_WRITE_ONLY, sizeof(i64) * numThreads, nullptr, &errorCode);
 	const cl_program prog = clCreateProgramWithSource(clCtx, 1, &kernelCode, nullptr, &errorCode);
-	if (errorCode != 0) {
+	if (errorCode != 0)
+	{
 		printf("error creating kernel\n");
 		printf("%s\n", errorToStr(errorCode));
 	}
 	status = clBuildProgram(prog, 1, &bestGpuDevice, 0, 0, 0);
-	if (status != CL_SUCCESS) {
-		if (status == CL_BUILD_PROGRAM_FAILURE) {
+	if (status != CL_SUCCESS)
+	{
+		if (status == CL_BUILD_PROGRAM_FAILURE)
+		{
 			printf("Error building kernel\n");
 			char buffer[4 * 1024];
 			size_t len;
@@ -254,7 +268,8 @@ i64 calcWithOpenCl()
 	{
 		cl_long offset = i * perIteration;
 		cl_long newPercent = (10000 * offset) / N;
-		if (newPercent > percent) {
+		if (newPercent > percent)
+		{
 			printf("%" PRId64 ".%" PRId64 "%%\n", newPercent / 100, newPercent % 100);
 			percent = newPercent;
 			calcElapsedAndPrintETA(startT, i, numIterations);
@@ -263,7 +278,8 @@ i64 calcWithOpenCl()
 		static const size_t spaceSize[1] = {numThreads};
 		status = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, nullptr, spaceSize, nullptr, 0, nullptr, nullptr);
 		clEnqueueReadBuffer(cmdQueue, resultBuffer, CL_TRUE, 0, sizeof(i64) * numThreads, result, 0, nullptr, nullptr);
-		for (int i = 0; i < numThreads; i++) {
+		for (int i = 0; i < numThreads; i++)
+		{
 			if (result[i])
 				return result[i];
 		}
@@ -285,40 +301,48 @@ static void printPhysicalDeviceProps(VkPhysicalDevice gpu)
 	printPhysicalDeviceProps(props);
 }
 
-static void printMemoryProps(const VkPhysicalDeviceMemoryProperties& memProps)
+static void printMemoryProps(const VkPhysicalDeviceMemoryProperties &memProps)
 {
 	printf("Memory Types:\n");
-	for(int i = 0; i < memProps.memoryTypeCount; i++) {
-		auto& t = memProps.memoryTypes[i];
+	for (int i = 0; i < memProps.memoryTypeCount; i++)
+	{
+		auto &t = memProps.memoryTypes[i];
 		printf("%d)\n", i);
 		printf("  Heap index: %d\n", t.heapIndex);
 		printf("  Flags:");
-		if(t.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+		if (t.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 			printf(" VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |");
-		if(t.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+		if (t.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
 			printf(" VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |");
-		if(t.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+		if (t.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
 			printf(" VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |");
-		if(t.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
+		if (t.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
 			printf(" VK_MEMORY_PROPERTY_HOST_CACHED_BIT |");
-		if(t.propertyFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT)
+		if (t.propertyFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT)
 			printf(" VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT |");
-		if(t.propertyFlags & VK_MEMORY_PROPERTY_PROTECTED_BIT)
+		if (t.propertyFlags & VK_MEMORY_PROPERTY_PROTECTED_BIT)
 			printf(" VK_MEMORY_PROPERTY_PROTECTED_BIT |");
-			
+
 		printf("\n");
 	}
 
 	printf("\nMemory Heaps:\n");
-	for(int i = 0; i < memProps.memoryHeapCount; i++) {
-		auto& heap = memProps.memoryHeaps[i];
+	for (int i = 0; i < memProps.memoryHeapCount; i++)
+	{
+		auto &heap = memProps.memoryHeaps[i];
 		printf("%d)\n", i);
 		printf("  Size: %" PRIu64 "MB\n", heap.size / (1024 * 1024));
 		printf("  Flags:");
-		if(heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+		if (heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
 			printf(" VK_MEMORY_HEAP_DEVICE_LOCAL_BIT");
 		printf("\n");
 	}
+}
+
+inline size_t aligned(size_t offset, size_t alignment)
+{
+	offset = (offset + alignment - 1) / alignment * alignment;
+	return offset;
 }
 
 static i64 calcWithVulkan()
@@ -328,7 +352,8 @@ static i64 calcWithVulkan()
 	u32 numLayers = MAX_LAYERS;
 	vkEnumerateInstanceLayerProperties(&numLayers, layersProps);
 	printf("Available Layers\n");
-	for(u32 i = 0; i < numLayers; i++) {
+	for (u32 i = 0; i < numLayers; i++)
+	{
 		printf("%s: %s\n", layersProps[i].layerName, layersProps[i].description);
 	}
 
@@ -344,12 +369,13 @@ static i64 calcWithVulkan()
 	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	instanceCreateInfo.pApplicationInfo = &appInfo;
 	instanceCreateInfo.enabledLayerCount = 1;
-	static const char* const LAYER_NAMES[] = {"VK_LAYER_KHRONOS_validation"};
+	static const char *const LAYER_NAMES[] = {"VK_LAYER_KHRONOS_validation"};
 	instanceCreateInfo.ppEnabledLayerNames = LAYER_NAMES;
 	VkInstance inst;
 	VkResult result = vkCreateInstance(&instanceCreateInfo, nullptr, &inst);
 
-	if(result != VK_SUCCESS) {
+	if (result != VK_SUCCESS)
+	{
 		printf("Error creating Vulkan instance\n");
 		return 0;
 	}
@@ -361,11 +387,12 @@ static i64 calcWithVulkan()
 	assert(numPhysicalDevices > 0);
 
 	VkPhysicalDevice bestGpu = nullptr;
-	for(u32 i = 0; i < numPhysicalDevices; i++) {
+	for (u32 i = 0; i < numPhysicalDevices; i++)
+	{
 		VkPhysicalDeviceProperties props;
 		vkGetPhysicalDeviceProperties(physicalDevices[i], &props);
 		//printPhyiscalDeviceProps(props);
-		if(!bestGpu || strstri(props.deviceName, "geforce"))
+		if (!bestGpu || strstri(props.deviceName, "geforce"))
 			bestGpu = physicalDevices[i];
 	}
 	printf("best GPU: ");
@@ -376,29 +403,29 @@ static i64 calcWithVulkan()
 	u32 numQueueFamilies = MAX_QUEUE_FAMILIES;
 	vkGetPhysicalDeviceQueueFamilyProperties(bestGpu, &numQueueFamilies, queueFamiles);
 	printf("numQueueFamilies: %d\n", numQueueFamilies);
-	for(int i = 0; i < numQueueFamilies; i++) {
+	for (int i = 0; i < numQueueFamilies; i++)
+	{
 		printf("%d)\n", i);
 		printf("flags: ");
-		if(queueFamiles[i].queueFlags | VK_QUEUE_COMPUTE_BIT)
+		if (queueFamiles[i].queueFlags | VK_QUEUE_COMPUTE_BIT)
 			printf("COMPUTE | ");
-		if(queueFamiles[i].queueFlags | VK_QUEUE_GRAPHICS_BIT)
+		if (queueFamiles[i].queueFlags | VK_QUEUE_GRAPHICS_BIT)
 			printf("GRAPHICS | ");
-		if(queueFamiles[i].queueFlags | VK_QUEUE_TRANSFER_BIT)
+		if (queueFamiles[i].queueFlags | VK_QUEUE_TRANSFER_BIT)
 			printf("TRANSFER | ");
-		if(queueFamiles[i].queueFlags | VK_QUEUE_SPARSE_BINDING_BIT)
+		if (queueFamiles[i].queueFlags | VK_QUEUE_SPARSE_BINDING_BIT)
 			printf("SPARSE_BINDING | ");
-			
+
 		printf("\n");
 		printf("queueCount: %d\n", queueFamiles[i].queueCount);
 	}
 	u32 bestQueueFamilyInd = -1;
-	for(u32 i = 0; i < numQueueFamilies; i++) {
-		if( (queueFamiles[i].queueFlags | VK_QUEUE_COMPUTE_BIT) &&
-			(
-				bestQueueFamilyInd == -1 ||
-				queueFamiles[i].queueCount > queueFamiles[bestQueueFamilyInd].queueCount
-			)
-		) {
+	for (u32 i = 0; i < numQueueFamilies; i++)
+	{
+		if ((queueFamiles[i].queueFlags | VK_QUEUE_COMPUTE_BIT) &&
+			(bestQueueFamilyInd == -1 ||
+			 queueFamiles[i].queueCount > queueFamiles[bestQueueFamilyInd].queueCount))
+		{
 			bestQueueFamilyInd = i;
 		}
 	}
@@ -412,13 +439,14 @@ static i64 calcWithVulkan()
 
 	VkPhysicalDeviceFeatures gpuFeatures;
 	vkGetPhysicalDeviceFeatures(bestGpu, &gpuFeatures);
-	if(!gpuFeatures.shaderInt64) {
+	if (!gpuFeatures.shaderInt64)
+	{
 		printf("Error: 64 bit integer not supported\n");
 		return 0;
 	}
 	memset(&gpuFeatures, 0, sizeof(gpuFeatures));
 	gpuFeatures.shaderInt64 = VK_TRUE;
-	
+
 	VkDeviceCreateInfo deviceCreateInfo = {};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.queueCreateInfoCount = 1;
@@ -430,36 +458,306 @@ static i64 calcWithVulkan()
 	VkPhysicalDeviceMemoryProperties memProps;
 	vkGetPhysicalDeviceMemoryProperties(bestGpu, &memProps);
 	printMemoryProps(memProps);
+	const u32 localMemTypeInd = [&memProps]() -> u32 {
+		for (u32 i = 0; i < memProps.memoryTypeCount; i++)
+		{
+			const VkMemoryPropertyFlags typeFlags = memProps.memoryTypes[i].propertyFlags;
+			if (typeFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+				return i;
+		}
+		assert(false);
+	}();
+	const u32 hostVisibleMemTypeInd = [&memProps]() -> u32 {
+		for (u32 i = 0; i < memProps.memoryTypeCount; i++)
+		{
+			const VkMemoryPropertyFlags typeFlags = memProps.memoryTypes[i].propertyFlags;
+			if (typeFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+				return i;
+		}
+		assert(false);
+	}();
 
-	VkBufferCreateInfo bufferCreateInfo = {};
-	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferCreateInfo.size = sizeof(i64) * numThreads;
-	bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-	bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	struct Uniforms { i64 start, perThread, N; };
+	const Uniforms uniforms = { 0, perThread, N };
+
+	VkBuffer stagingBuffer;
+	{
+		VkBufferCreateInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		info.size = sizeof(i64) * numThreads + sizeof(Uniforms);
+		info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		vkCreateBuffer(device, &info, nullptr, &stagingBuffer);
+	}
+
 	VkBuffer buffer;
-	vkCreateBuffer(device, &bufferCreateInfo, nullptr, &buffer);
+	{
+		VkBufferCreateInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		info.size = sizeof(i64) * numThreads;
+		info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		vkCreateBuffer(device, &info, nullptr, &buffer);
+	}
 
-	VkMemoryRequirements bufferMemReqs;
-	vkGetBufferMemoryRequirements(device, buffer, &bufferMemReqs);
+	VkBuffer unifsBuffer;
+	{
+		VkBufferCreateInfo info;
+		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		info.size = sizeof(Uniforms);
+		info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		vkCreateBuffer(device, &info, nullptr, &unifsBuffer);
+	}
+
+	VkBuffer stagingBuffer;
+	{
+		VkBufferCreateInfo info;
+		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		info.size = sizeof(i64) * numThreads;
+		info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		vkCreateBuffer(device, &info, nullptr, &stagingBuffer);
+	}
 
 	VkDeviceMemory bufferMem = nullptr;
-	//VkMemoryPropertyFlagBits memPropFlags;
-	VkMemoryAllocateInfo allocInfo;
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = bufferMemReqs.size;
-	for(u32 i = 0; i < memProps.memoryTypeCount; i++) {
-		const VkMemoryPropertyFlags typeFlags = memProps.memoryTypes[i].propertyFlags;
-		if(typeFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-			allocInfo.memoryTypeIndex = i;
-			break;
+	{
+		VkMemoryRequirements bufferMemReqs[2];
+		vkGetBufferMemoryRequirements(device, buffer, &bufferMemReqs[0]);
+		vkGetBufferMemoryRequirements(device, unifsBuffer, &bufferMemReqs[1]);
+		const size_t unifsBufferOffset = aligned(bufferMemReqs[0].size, bufferMemReqs[1].alignment);
+		const size_t memSize = unifsBufferOffset + bufferMemReqs[1].size;
+
+		//VkMemoryPropertyFlagBits memPropFlags;
+		VkMemoryAllocateInfo allocInfo;
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memSize;
+		allocInfo.memoryTypeIndex = localMemTypeInd;
+		vkAllocateMemory(device, &allocInfo, nullptr, &bufferMem);
+		assert(bufferMem && "Error allocating memory");
+		vkBindBufferMemory(device, buffer, bufferMem, 0);
+		vkBindBufferMemory(device, unifsBuffer, bufferMem, unifsBufferOffset);
+	}
+
+	VkDeviceMemory stagingBufferMem = nullptr;
+	{
+		VkMemoryRequirements bufferMemReqs;
+		vkGetBufferMemoryRequirements(device, stagingBuffer, &bufferMemReqs);
+		VkMemoryAllocateInfo allocInfo;
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = sizeof(i64) * numThreads;
+		allocInfo.memoryTypeIndex = hostVisibleMemTypeInd;
+		vkAllocateMemory(device, &allocInfo, nullptr, &stagingBufferMem);
+		vkBindBufferMemory(device, stagingBuffer, stagingBufferMem, 0);
+	}
+
+	VkShaderModule shaderModule;
+	{
+		VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
+		FILE *file = fopen("../calc.spv", "r");
+		const int MAX_CODE_SIZE = 1 << 20;
+		u32 *code = new u32[MAX_CODE_SIZE];
+		const int codeSize = fread(code, sizeof(u32), MAX_CODE_SIZE - 1, file);
+		shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		shaderModuleCreateInfo.pCode = code;
+		shaderModuleCreateInfo.codeSize = 4 * codeSize;
+		vkCreateShaderModule(device, &shaderModuleCreateInfo, nullptr, &shaderModule);
+	}
+
+	VkPipelineShaderStageCreateInfo stageCreateInfo = {};
+	stageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageCreateInfo.module = shaderModule;
+	stageCreateInfo.pName = "main";
+	//info.pSpecializationInfo = nullptr;
+
+	VkDescriptorSetLayout descriptorSetLayout[2];
+	{
+		VkDescriptorSetLayoutBinding descriptorSetLayoutBinding;
+		descriptorSetLayoutBinding.binding = 0;
+		descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorSetLayoutBinding.descriptorCount = 1;
+		descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+		VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
+		descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		descriptorSetLayoutCreateInfo.bindingCount = 1;
+		descriptorSetLayoutCreateInfo.pBindings = &descriptorSetLayoutBinding;
+		vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, nullptr, &descriptorSetLayout[0]);
+
+		descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, nullptr, &descriptorSetLayout[1]);
+	}
+
+	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
+	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutCreateInfo.setLayoutCount = 2;
+	pipelineLayoutCreateInfo.pSetLayouts = descriptorSetLayout;
+
+	VkPipelineLayout pipelineLayout;
+	vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout);
+
+	VkComputePipelineCreateInfo pipelineCreateInfo = {};
+	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineCreateInfo.stage = stageCreateInfo;
+	pipelineCreateInfo.layout = pipelineLayout;
+
+	VkPipeline pipeline;
+	vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipeline);
+
+	VkDescriptorPool descriptorPool;
+	{
+		VkDescriptorPoolSize poolSizes[2] = {};
+		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSizes[0].descriptorCount = 1;
+		poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		poolSizes[1].descriptorCount = 1;
+		VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
+		descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		descriptorPoolCreateInfo.maxSets = 2;
+		descriptorPoolCreateInfo.poolSizeCount = 2;
+		descriptorPoolCreateInfo.pPoolSizes = poolSizes;
+		vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, nullptr, &descriptorPool);
+	}
+
+	VkDescriptorSet descriptorSets[2];
+	{
+		VkDescriptorSetAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = descriptorPool;
+		allocInfo.descriptorSetCount = 2;
+		allocInfo.pSetLayouts = descriptorSetLayout;
+		vkAllocateDescriptorSets(device, &allocInfo, descriptorSets);
+
+		VkDescriptorBufferInfo bufferInfos[2];
+		bufferInfos[0].buffer = unifsBuffer;
+		bufferInfos[0].offset = 0;
+		bufferInfos[0].range = VK_WHOLE_SIZE;
+		bufferInfos[1].buffer = buffer;
+		bufferInfos[1].offset = 0;
+		bufferInfos[1].range = VK_WHOLE_SIZE;
+
+		VkWriteDescriptorSet writes[2] = {};
+		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[0].dstSet = descriptorSets[0];
+		writes[0].dstBinding = 0;
+		writes[0].dstArrayElement = 0;
+		writes[0].descriptorCount = 1;
+		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writes[0].pBufferInfo = &bufferInfos[0];
+		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[1].dstSet = descriptorSets[1];
+		writes[1].dstBinding = 0;
+		writes[1].dstArrayElement = 0;
+		writes[1].descriptorCount = 1;
+		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		writes[1].pBufferInfo = &bufferInfos[1];
+		vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+	}
+
+	VkCommandPool commandPool;
+	{
+		VkCommandPoolCreateInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		info.queueFamilyIndex = bestQueueFamilyInd;
+		vkCreateCommandPool(device, &info, nullptr, &commandPool);
+	}
+	
+	VkCommandBuffer commandBuffer;
+	{
+		VkCommandBufferAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.commandPool = commandPool;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandBufferCount = 1;
+		vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+	}
+
+	{
+		VkCommandBufferBeginInfo beginInfo = {};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = 0;
+		beginInfo.pInheritanceInfo = nullptr;
+		vkBeginCommandBuffer(commandBuffer, &beginInfo);
+	}
+
+	VkBufferMemoryBarrier memBarrier0 = {};
+	memBarrier0.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+	memBarrier0.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	memBarrier0.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+	memBarrier0.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarrier0.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarrier0.buffer = unifsBuffer;
+	memBarrier0.offset = 0;
+	memBarrier0.size = VK_WHOLE_SIZE;
+
+	VkBufferMemoryBarrier memBarrier1 = {};
+	memBarrier1.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+	memBarrier1.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	memBarrier1.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	memBarrier1.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarrier1.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarrier1.buffer = buffer;
+	memBarrier1.offset = 0;
+	memBarrier1.size = VK_WHOLE_SIZE;
+
+	VkBufferMemoryBarrier memBarrier2 = {};
+	memBarrier2.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+	memBarrier2.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	memBarrier2.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	memBarrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarrier2.buffer = buffer;
+	memBarrier2.offset = 0;
+	memBarrier2.size = VK_WHOLE_SIZE;
+
+	const double startT = getTime();
+	i64 percent = 0;
+	for (i64 i = 0; i < numIterations; i++)
+	{
+		i64 start = i * perIteration;
+		i64 newPercent = (10000 * start) / N;
+		if (newPercent > percent)
+		{
+			printf("%" PRId64 ".%" PRId64 "%%\n", newPercent / 100, newPercent % 100);
+			percent = newPercent;
+			calcElapsedAndPrintETA(startT, i, numIterations);
+		}
+
+		vkCmdUpdateBuffer(commandBuffer, unifsBuffer, 0, sizeof(unifsBuffer), &unifsBuffer);
+		vkCmdPipelineBarrier(commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+			0, nullptr,
+			1, &memBarrier0,
+			0, nullptr);
+
+		vkCmdDispatch(commandBuffer, numThreads, 1, 1);
+
+		vkCmdPipelineBarrier(commandBuffer,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+			0, nullptr,
+			1, &memBarrier1,
+			0, nullptr);
+
+		vkCmdCopyBuffer(commandBuffer,
+			buffer, stagingBuffer, 1, &region);
+
+		vkCmdPipelineBarrier(commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+			0, nullptr,
+			1, memBarrier2,
+			0, nullptr);
+
+		i64* result;
+		vkMapMemory(device, stagingBufferMem, 0, sizeof(i64) * numThreads, 0, (void**)&result);
+
+		for (int i = 0; i < numThreads; i++)
+		{
+			if (result[i])
+				return result[i];
 		}
 	}
-	vkAllocateMemory(device, &allocInfo, nullptr, &bufferMem);
-	assert(bufferMem && "Error allocating memory");
-	vkBindBufferMemory(device, buffer, bufferMem, 0);
-
-
-
+	for(int64_t i = 0; i < )
 
 	return 0;
 }
