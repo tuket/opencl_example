@@ -3,6 +3,7 @@
 
 layout (local_size_x = 128) in;
 layout(set = 0, binding = 0) uniform Unifs {
+    uniform int64_t start;
     uniform int64_t n;
     uniform int64_t N;
 } unifs;
@@ -15,7 +16,7 @@ void main()
 {
     uint myId = gl_GlobalInvocationID.x;
     outBuf[myId] = 0;
-    uint64_t start = myId * unifs.n;
+    uint64_t start = unifs.start + myId * unifs.n;
     uint64_t end = start + unifs.n;
     for(uint64_t i = start; i < end; i++) {
         if((11 * i) % unifs.N == 1) {
