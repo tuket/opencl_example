@@ -5,6 +5,7 @@ project (cl_example)
 find_package(OpenCL REQUIRED)
 find_package(Vulkan REQUIRED)
 include_directories(${OpenCL_INCLUDE_DIRS})
+include_directories(${Vulkan_INCLUDE_DIRS})
 link_directories(${OpenCL_LIBRARY})
 
 add_executable(cl_example
