@@ -2,6 +2,8 @@ cmake_minimum_required (VERSION 3.2)
 
 project (cl_example)
 
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:10000000")
+
 find_package(OpenCL REQUIRED)
 find_package(Vulkan REQUIRED)
 include_directories(${OpenCL_INCLUDE_DIRS})

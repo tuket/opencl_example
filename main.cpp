@@ -44,11 +44,23 @@ static const char *strstri(const char *container, const char *contained)
 	return nullptr;
 }
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 static double getTime()
 {
+#ifdef _WIN32
+	LARGE_INTEGER t, f;
+	bool success = QueryPerformanceCounter(&t);
+	success &= QueryPerformanceFrequency(&f);
+	assert(success);
+	return double(t.QuadPart) / double(f.QuadPart);
+#else
 	timespec t;
 	clock_gettime(CLOCK_REALTIME, &t);
 	return t.tv_sec + 1e-9 * t.tv_nsec;
+#endif
 }
 
 static void printETA(double t)
@@ -348,7 +360,8 @@ inline size_t aligned(size_t offset, size_t alignment)
 static i64 calcWithVulkan()
 {
 	constexpr u32 MAX_LAYERS = 32;
-	VkLayerProperties layersProps[MAX_LAYERS];
+	VkLayerProperties* layersProps = new VkLayerProperties[MAX_LAYERS];
+	// TODO: delete[]
 	u32 numLayers = MAX_LAYERS;
 	vkEnumerateInstanceLayerProperties(&numLayers, layersProps);
 	printf("Available Layers\n");
@@ -384,7 +397,8 @@ static i64 calcWithVulkan()
 	}
 
 	constexpr u32 MAX_PHYSICAL_DEVICES = 4;
-	VkPhysicalDevice physicalDevices[MAX_PHYSICAL_DEVICES];
+	VkPhysicalDevice* physicalDevices = new VkPhysicalDevice[MAX_PHYSICAL_DEVICES];
+	// TODO: delete[]
 	u32 numPhysicalDevices = MAX_PHYSICAL_DEVICES;
 	vkEnumeratePhysicalDevices(inst, &numPhysicalDevices, physicalDevices);
 	assert(numPhysicalDevices > 0);
@@ -402,7 +416,8 @@ static i64 calcWithVulkan()
 	printPhysicalDeviceProps(bestGpu);
 
 	constexpr u32 MAX_QUEUE_FAMILIES = 8;
-	VkQueueFamilyProperties queueFamiles[MAX_QUEUE_FAMILIES];
+	VkQueueFamilyProperties* queueFamiles = new VkQueueFamilyProperties[MAX_QUEUE_FAMILIES];
+	// TODO: delete[]
 	u32 numQueueFamilies = MAX_QUEUE_FAMILIES;
 	vkGetPhysicalDeviceQueueFamilyProperties(bestGpu, &numQueueFamilies, queueFamiles);
 	printf("numQueueFamilies: %d\n", numQueueFamilies);
@@ -458,6 +473,9 @@ static i64 calcWithVulkan()
 	VkDevice device;
 	vkCreateDevice(bestGpu, &deviceCreateInfo, nullptr, &device);
 
+	VkQueue queue;
+	vkGetDeviceQueue(device, bestQueueFamilyInd, 0, &queue);
+
 	VkPhysicalDeviceMemoryProperties memProps;
 	vkGetPhysicalDeviceMemoryProperties(bestGpu, &memProps);
 	printMemoryProps(memProps);
@@ -495,7 +513,7 @@ static i64 calcWithVulkan()
 
 	VkBuffer unifsBuffer;
 	{
-		VkBufferCreateInfo info;
+		VkBufferCreateInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 		info.size = sizeof(Uniforms);
 		info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -505,7 +523,7 @@ static i64 calcWithVulkan()
 
 	VkBuffer stagingBuffer;
 	{
-		VkBufferCreateInfo info;
+		VkBufferCreateInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 		info.size = sizeof(i64) * numThreads;
 		info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -522,7 +540,7 @@ static i64 calcWithVulkan()
 		const size_t memSize = unifsBufferOffset + bufferMemReqs[1].size;
 
 		//VkMemoryPropertyFlagBits memPropFlags;
-		VkMemoryAllocateInfo allocInfo;
+		VkMemoryAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memSize;
 		allocInfo.memoryTypeIndex = localMemTypeInd;
@@ -536,7 +554,7 @@ static i64 calcWithVulkan()
 	{
 		VkMemoryRequirements bufferMemReqs;
 		vkGetBufferMemoryRequirements(device, stagingBuffer, &bufferMemReqs);
-		VkMemoryAllocateInfo allocInfo;
+		VkMemoryAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = bufferMemReqs.size;
 		allocInfo.memoryTypeIndex = hostVisibleMemTypeInd;
@@ -547,7 +565,7 @@ static i64 calcWithVulkan()
 	VkShaderModule shaderModule;
 	{
 		VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
-		FILE *file = fopen("../calc.spv", "r");
+		FILE *file = fopen("../calc.spv", "rb");
 		const int MAX_CODE_SIZE = 1 << 20;
 		u32 *code = new u32[MAX_CODE_SIZE];
 		const int codeSize = fread(code, sizeof(u32), MAX_CODE_SIZE - 1, file);
@@ -555,6 +573,8 @@ static i64 calcWithVulkan()
 		shaderModuleCreateInfo.pCode = code;
 		shaderModuleCreateInfo.codeSize = 4 * codeSize;
 		vkCreateShaderModule(device, &shaderModuleCreateInfo, nullptr, &shaderModule);
+		delete[] code;
+		fclose(file);
 	}
 
 	VkPipelineShaderStageCreateInfo stageCreateInfo = {};
@@ -564,7 +584,8 @@ static i64 calcWithVulkan()
 	stageCreateInfo.pName = "main";
 	//info.pSpecializationInfo = nullptr;
 
-	VkDescriptorSetLayout descriptorSetLayout[2];
+	VkDescriptorSetLayout* descriptorSetLayout = new VkDescriptorSetLayout[2];
+	// TODO: delete[]
 	{
 		VkDescriptorSetLayoutBinding descriptorSetLayoutBinding;
 		descriptorSetLayoutBinding.binding = 0;
@@ -613,7 +634,7 @@ static i64 calcWithVulkan()
 		vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, nullptr, &descriptorPool);
 	}
 
-	VkDescriptorSet descriptorSets[2];
+	VkDescriptorSet* descriptorSets = new VkDescriptorSet[2];
 	{
 		VkDescriptorSetAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -666,43 +687,42 @@ static i64 calcWithVulkan()
 		vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
 	}
 
-	{
-		VkCommandBufferBeginInfo beginInfo = {};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = 0;
-		beginInfo.pInheritanceInfo = nullptr;
-		vkBeginCommandBuffer(commandBuffer, &beginInfo);
-	}
+	VkBufferMemoryBarrier* memBarriers = new VkBufferMemoryBarrier[3];
+	memBarriers[0] = {};
+	memBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	memBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	memBarriers[0].dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+	memBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarriers[0].buffer = unifsBuffer;
+	memBarriers[0].offset = 0;
+	memBarriers[0].size = VK_WHOLE_SIZE;
 
-	VkBufferMemoryBarrier memBarrier0 = {};
-	memBarrier0.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	memBarrier0.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	memBarrier0.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
-	memBarrier0.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	memBarrier0.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	memBarrier0.buffer = unifsBuffer;
-	memBarrier0.offset = 0;
-	memBarrier0.size = VK_WHOLE_SIZE;
+	memBarriers[1] = {};
+	memBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	memBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	memBarriers[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	memBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarriers[1].buffer = buffer;
+	memBarriers[1].offset = 0;
+	memBarriers[1].size = VK_WHOLE_SIZE;
 
-	VkBufferMemoryBarrier memBarrier1 = {};
-	memBarrier1.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	memBarrier1.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-	memBarrier1.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	memBarrier1.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	memBarrier1.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	memBarrier1.buffer = buffer;
-	memBarrier1.offset = 0;
-	memBarrier1.size = VK_WHOLE_SIZE;
+	memBarriers[2] = {};
+	memBarriers[2].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	memBarriers[2].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	memBarriers[2].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	memBarriers[2].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarriers[2].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	memBarriers[2].buffer = stagingBuffer;
+	memBarriers[2].offset = 0;
+	memBarriers[2].size = VK_WHOLE_SIZE;
 
-	VkBufferMemoryBarrier memBarrier2 = {};
-	memBarrier2.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	memBarrier2.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	memBarrier2.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	memBarrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	memBarrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	memBarrier2.buffer = stagingBuffer;
-	memBarrier2.offset = 0;
-	memBarrier2.size = VK_WHOLE_SIZE;
+	VkCommandBufferBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = 0;
+	beginInfo.pInheritanceInfo = nullptr;
+	vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout,
@@ -714,19 +734,22 @@ static i64 calcWithVulkan()
 	{
 		i64 start = i * perIteration;
 		i64 newPercent = (10000 * start) / N;
-		if (newPercent/1000 > percent/1000)
+		if (newPercent/1 > percent/1)
 		{
 			printf("%" PRId64 ".%" PRId64 "%%\n", newPercent / 100, newPercent % 100);
 			percent = newPercent;
 			calcElapsedAndPrintETA(startT, i, numIterations);
 		}
 
+		if (i != 0)
+			vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
 		uniforms.start = i * numThreads;
 		vkCmdUpdateBuffer(commandBuffer, unifsBuffer, 0, sizeof(uniforms), &uniforms);
 		vkCmdPipelineBarrier(commandBuffer,
 			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
 			0, nullptr,
-			1, &memBarrier0,
+			1, &memBarriers[0],
 			0, nullptr);
 
 		vkCmdDispatch(commandBuffer, numThreads, 1, 1);
@@ -734,7 +757,7 @@ static i64 calcWithVulkan()
 		vkCmdPipelineBarrier(commandBuffer,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
 			0, nullptr,
-			1, &memBarrier1,
+			1, &memBarriers[1],
 			0, nullptr);
 
 		VkBufferCopy copyInfo = {};
@@ -747,8 +770,19 @@ static i64 calcWithVulkan()
 		vkCmdPipelineBarrier(commandBuffer,
 			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
 			0, nullptr,
-			1, &memBarrier2,
+			1, &memBarriers[2],
 			0, nullptr);
+
+		vkEndCommandBuffer(commandBuffer);
+		
+		{
+			VkSubmitInfo info = {};
+			info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			info.commandBufferCount = 1;
+			info.pCommandBuffers = &commandBuffer;
+			vkQueueSubmit(queue, 1, &info, VK_NULL_HANDLE);
+		}
+		vkQueueWaitIdle(queue);
 
 		i64* result;
 		vkMapMemory(device, stagingBufferMem, 0, sizeof(i64) * numThreads, 0, (void**)&result);
