@@ -24,7 +24,7 @@ constexpr i64 numThreads = 10'000;
 constexpr i64 perIteration = perThread * numThreads;
 constexpr i64 numIterations = N / perIteration;
 
-static const char *strstri(const char *container, const char *contained)
+static const char* strstri(const char* container, const char* contained)
 {
 	const int containerLen = strlen(container);
 	const int containedLen = strlen(contained);
@@ -81,7 +81,7 @@ static void calcElapsedAndPrintETA(double startT, i64 done, i64 total)
 	printETA(eta);
 }
 
-static void printDeviceInfo(cl_device_id device, const char *indent)
+static void printDeviceInfo(cl_device_id device, const char* indent)
 {
 	char queryBuffer[1024];
 	int queryInt;
@@ -102,7 +102,7 @@ static void printDeviceInfo(cl_device_id device, const char *indent)
 	printf("%sCL_DEVICE_MAX_COMPUTE_UNITS: %d\n", indent, queryInt);
 }
 
-static void printPlatformInfo(cl_platform_id p, const char *indent)
+static void printPlatformInfo(cl_platform_id p, const char* indent)
 {
 	constexpr int BUFFER_SIZE = 4 * 1024;
 	char buffer[BUFFER_SIZE];
@@ -118,14 +118,14 @@ static void printPlatformInfo(cl_platform_id p, const char *indent)
 	printf("%sextensions:\n %s\n", indent, buffer);
 }
 
-static void errorCallbackCL(const char *errInfo, const void *privateInfo, size_t privateInfoSize, void *userData)
+static void errorCallbackCL(const char* errInfo, const void* privateInfo, size_t privateInfoSize, void* userData)
 {
 }
 
 constexpr cl_uint MAX_PLATFORMS = 8;
 constexpr cl_uint MAX_DEVICES = 8;
 
-static void printPlatformsAndDevicesInfo(cl_uint numPlatforms, const cl_platform_id *platformIds)
+static void printPlatformsAndDevicesInfo(cl_uint numPlatforms, const cl_platform_id* platformIds)
 {
 
 	printf("numPlatforms: %d\n", numPlatforms);
@@ -146,7 +146,7 @@ static void printPlatformsAndDevicesInfo(cl_uint numPlatforms, const cl_platform
 	}
 }
 
-static const char *errorToStr(cl_int err)
+static const char* errorToStr(cl_int err)
 {
 	switch (err)
 	{
@@ -192,8 +192,8 @@ static i64 calcWithCpu()
 
 // --- OpenCL implementation ---
 
-const char *kernelCode =
-	R"CL(
+const char* kernelCode =
+R"CL(
 #define NANO ((long)1000000000)
 __kernel void search(__global long* out, long offset, long perThread)
 {
@@ -244,7 +244,7 @@ i64 calcWithOpenCl()
 	const cl_context clCtx = clCreateContext(ctxProps, 1, &bestGpuDevice, errorCallbackCL, nullptr, &errorCode);
 
 	const cl_command_queue cmdQueue = clCreateCommandQueue(clCtx, bestGpuDevice, 0, &errorCode);
-	i64 *result = new i64[numThreads];
+	i64* result = new i64[numThreads];
 	//memset(result, 0, sizeof(i64) * perIteration);
 	const cl_mem resultBuffer = clCreateBuffer(clCtx, CL_MEM_WRITE_ONLY, sizeof(i64) * numThreads, nullptr, &errorCode);
 	const cl_program prog = clCreateProgramWithSource(clCtx, 1, &kernelCode, nullptr, &errorCode);
@@ -302,9 +302,18 @@ i64 calcWithOpenCl()
 }
 
 // --- Vulkan implementation ---
-static void printPhysicalDeviceProps(VkPhysicalDeviceProperties props)
+static void printPhysicalDeviceLimits(const VkPhysicalDeviceLimits& lims)
+{
+	printf("maxComputeWorkGroupCount: %d x %d x %d\n",
+		lims.maxComputeWorkGroupCount[0], lims.maxComputeWorkGroupCount[1], lims.maxComputeWorkGroupCount[2]);
+	printf("maxComputeWorkGroupSize: %d x %d x %d\n",
+		lims.maxComputeWorkGroupSize[0], lims.maxComputeWorkGroupSize[1], lims.maxComputeWorkGroupSize[2]);
+	printf("maxComputeWorkGroupInvocations: %d\n", lims.maxComputeWorkGroupInvocations);
+}
+static void printPhysicalDeviceProps(const VkPhysicalDeviceProperties& props)
 {
 	printf("device name: %s\n", props.deviceName);
+	printPhysicalDeviceLimits(props.limits);
 }
 static void printPhysicalDeviceProps(VkPhysicalDevice gpu)
 {
@@ -313,12 +322,12 @@ static void printPhysicalDeviceProps(VkPhysicalDevice gpu)
 	printPhysicalDeviceProps(props);
 }
 
-static void printMemoryProps(const VkPhysicalDeviceMemoryProperties &memProps)
+static void printMemoryProps(const VkPhysicalDeviceMemoryProperties& memProps)
 {
 	printf("Memory Types:\n");
 	for (int i = 0; i < memProps.memoryTypeCount; i++)
 	{
-		auto &t = memProps.memoryTypes[i];
+		auto& t = memProps.memoryTypes[i];
 		printf("%d)\n", i);
 		printf("  Heap index: %d\n", t.heapIndex);
 		printf("  Flags:");
@@ -341,7 +350,7 @@ static void printMemoryProps(const VkPhysicalDeviceMemoryProperties &memProps)
 	printf("\nMemory Heaps:\n");
 	for (int i = 0; i < memProps.memoryHeapCount; i++)
 	{
-		auto &heap = memProps.memoryHeaps[i];
+		auto& heap = memProps.memoryHeaps[i];
 		printf("%d)\n", i);
 		printf("  Size: %" PRIu64 "MB\n", heap.size / (1024 * 1024));
 		printf("  Flags:");
@@ -385,7 +394,7 @@ static i64 calcWithVulkan()
 	static const char* const EXTENSION_NAMES[] = {"VK_EXT_debug_utils"};
 	instanceCreateInfo.ppEnabledExtensionNames = EXTENSION_NAMES;
 	instanceCreateInfo.enabledLayerCount = 1;
-	static const char *const LAYER_NAMES[] = {"VK_LAYER_KHRONOS_validation"};
+	static const char* const LAYER_NAMES[] = {"VK_LAYER_KHRONOS_validation"};
 	instanceCreateInfo.ppEnabledLayerNames = LAYER_NAMES;
 	VkInstance inst;
 	VkResult result = vkCreateInstance(&instanceCreateInfo, nullptr, &inst);
@@ -442,7 +451,7 @@ static i64 calcWithVulkan()
 	{
 		if ((queueFamiles[i].queueFlags | VK_QUEUE_COMPUTE_BIT) &&
 			(bestQueueFamilyInd == -1 ||
-			 queueFamiles[i].queueCount > queueFamiles[bestQueueFamilyInd].queueCount))
+				queueFamiles[i].queueCount > queueFamiles[bestQueueFamilyInd].queueCount))
 		{
 			bestQueueFamilyInd = i;
 		}
@@ -499,7 +508,7 @@ static i64 calcWithVulkan()
 	}();
 
 	struct Uniforms { i64 start, perThread, N; };
-	Uniforms uniforms = { 0, perThread, N };
+	Uniforms uniforms = {0, perThread, N};
 
 	VkBuffer buffer;
 	{
@@ -565,9 +574,9 @@ static i64 calcWithVulkan()
 	VkShaderModule shaderModule;
 	{
 		VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
-		FILE *file = fopen("../calc.spv", "rb");
+		FILE* file = fopen("../calc.spv", "rb");
 		const int MAX_CODE_SIZE = 1 << 20;
-		u32 *code = new u32[MAX_CODE_SIZE];
+		u32* code = new u32[MAX_CODE_SIZE];
 		const int codeSize = fread(code, sizeof(u32), MAX_CODE_SIZE - 1, file);
 		shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 		shaderModuleCreateInfo.pCode = code;
@@ -676,7 +685,7 @@ static i64 calcWithVulkan()
 		info.queueFamilyIndex = bestQueueFamilyInd;
 		vkCreateCommandPool(device, &info, nullptr, &commandPool);
 	}
-	
+
 	VkCommandBuffer commandBuffer;
 	{
 		VkCommandBufferAllocateInfo allocInfo = {};
@@ -710,23 +719,25 @@ static i64 calcWithVulkan()
 
 	memBarriers[2] = {};
 	memBarriers[2].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	memBarriers[2].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	memBarriers[2].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	memBarriers[2].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	memBarriers[2].dstAccessMask = VK_ACCESS_HOST_READ_BIT;
 	memBarriers[2].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	memBarriers[2].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	memBarriers[2].buffer = stagingBuffer;
 	memBarriers[2].offset = 0;
 	memBarriers[2].size = VK_WHOLE_SIZE;
 
+	VkFence fence;
+	{
+		VkFenceCreateInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		vkCreateFence(device, &info, nullptr, &fence);
+	}
+
 	VkCommandBufferBeginInfo beginInfo = {};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = 0;
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	beginInfo.pInheritanceInfo = nullptr;
-	vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout,
-		0, 2, descriptorSets, 0, nullptr);
 
 	const double startT = getTime();
 	i64 percent = 0;
@@ -734,15 +745,18 @@ static i64 calcWithVulkan()
 	{
 		i64 start = i * perIteration;
 		i64 newPercent = (10000 * start) / N;
-		if (newPercent/1 > percent/1)
+		if (newPercent / 1 > percent / 1)
 		{
 			printf("%" PRId64 ".%" PRId64 "%%\n", newPercent / 100, newPercent % 100);
 			percent = newPercent;
 			calcElapsedAndPrintETA(startT, i, numIterations);
 		}
 
-		if (i != 0)
-			vkBeginCommandBuffer(commandBuffer, &beginInfo);
+		vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout,
+			0, 2, descriptorSets, 0, nullptr);
 
 		uniforms.start = i * numThreads;
 		vkCmdUpdateBuffer(commandBuffer, unifsBuffer, 0, sizeof(uniforms), &uniforms);
@@ -752,7 +766,7 @@ static i64 calcWithVulkan()
 			1, &memBarriers[0],
 			0, nullptr);
 
-		vkCmdDispatch(commandBuffer, numThreads, 1, 1);
+		vkCmdDispatch(commandBuffer, numThreads / 128, 1, 1);
 
 		vkCmdPipelineBarrier(commandBuffer,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
@@ -768,7 +782,7 @@ static i64 calcWithVulkan()
 			buffer, stagingBuffer, 1, &copyInfo);
 
 		vkCmdPipelineBarrier(commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0,
 			0, nullptr,
 			1, &memBarriers[2],
 			0, nullptr);
@@ -782,19 +796,23 @@ static i64 calcWithVulkan()
 			info.pCommandBuffers = &commandBuffer;
 			vkQueueSubmit(queue, 1, &info, VK_NULL_HANDLE);
 		}
-		vkQueueWaitIdle(queue);
+		vkDeviceWaitIdle(device);
+		vkResetCommandPool(device, commandPool, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 		i64* result;
 		vkMapMemory(device, stagingBufferMem, 0, sizeof(i64) * numThreads, 0, (void**)&result);
 
 		for (int i = 0; i < numThreads; i++)
 		{
-			if (result[i])
-				return result[i];
+			if (result[i]) {
+				auto res = result[i];
+				vkUnmapMemory(device, stagingBufferMem);
+				return res;
+			}
 		}
 		vkUnmapMemory(device, stagingBufferMem);
 	}
- 
+
 	return 0;
 }
 
