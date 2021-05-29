@@ -845,7 +845,7 @@ static i64 calcWithVulkan()
 		}
 	}
 
-	return checkResults(0);
+	return checkResults();
 }
 
 int main()

@@ -10,7 +10,7 @@ include_directories(${OpenCL_INCLUDE_DIRS})
 include_directories(${Vulkan_INCLUDE_DIRS})
 link_directories(${OpenCL_LIBRARY})
 
-add_compile_definitions(TRACY_ENABLE)
+#add_compile_definitions(TRACY_ENABLE)
 
 add_executable(cl_example
     main.cpp
