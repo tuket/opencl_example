@@ -9,6 +9,9 @@
 #include <assert.h>
 #include <vulkan/vulkan.h>
 
+#include "tracy/Tracy.hpp"
+#include "tracy/TracyVulkan.hpp""
+
 typedef int32_t i32;
 typedef uint32_t u32;
 typedef int64_t i64;
@@ -766,7 +769,11 @@ static i64 calcWithVulkan()
 
 	auto checkResults = [&](int bufInd) -> i64
 	{
-		vkWaitForFences(device, 1, fences + bufInd, VK_FALSE, ~u64(0));
+		ZoneScoped;
+		{
+			ZoneScopedN("wait for fences");
+			vkWaitForFences(device, 1, fences + bufInd, VK_FALSE, ~u64(0));
+		}
 
 		i64* result;
 		vkMapMemory(device, stagingBufferMem, stagingBufsOffsets[bufInd], sizeof(i64)* numThreads, 0, (void**)&result);
@@ -787,6 +794,7 @@ static i64 calcWithVulkan()
 	i64 percent = 0;
 	for (i64 i = 0; i < numIterations; i++)
 	{
+		ZoneScopedN("iteration");
 		i64 start = i * perIteration;
 		i64 newPercent = (10000 * start) / N;
 		if (newPercent / 10 > percent / 10)
