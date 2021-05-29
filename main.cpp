@@ -752,7 +752,7 @@ static i64 calcWithVulkan()
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	beginInfo.pInheritanceInfo = nullptr;
 
-	auto checkResults = [&](int bufInd) -> i64
+	auto checkResults = [&]() -> i64
 	{
 		ZoneScoped;
 		{
@@ -789,10 +789,6 @@ static i64 calcWithVulkan()
 			calcElapsedAndPrintETA(startT, i, numIterations);
 		}
 
-		//const int curBufInd = i % 2;
-		//const int prevBufInd = (i + 1) % 2;
-		const int curBufInd = 0;
-		const int prevBufInd = 0;
 		vkResetFences(device, 1, &fence);
 
 		vkBeginCommandBuffer(commandBuffer, &beginInfo);
@@ -842,7 +838,7 @@ static i64 calcWithVulkan()
 
 		if (i != 0)
 		{
-			auto res = checkResults(prevBufInd);
+			auto res = checkResults();
 			vkResetCommandBuffer(commandBuffer, 0);
 			if (res)
 				return res;
