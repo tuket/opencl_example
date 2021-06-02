@@ -10,7 +10,10 @@
 #include <vulkan/vulkan.h>
 
 #include "tracy/Tracy.hpp"
-#include "tracy/TracyVulkan.hpp""
+#include "tracy/TracyVulkan.hpp"
+#ifndef RENDERDOC
+#include "/Program Files/RenderDoc/renderdoc_app.h"
+#endif
 
 typedef int32_t i32;
 typedef uint32_t u32;
@@ -20,9 +23,9 @@ typedef uint64_t u64;
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 constexpr i64 NANO = 1'000'000'000;
-constexpr i64 NT = 60 * 60 * 12;
+constexpr i64 NT = 60;// *60 * 12;
 constexpr i64 N = NANO * NT;
-constexpr i64 perThread = 1'000'000; // how many iterations we will do in each work-item
+constexpr i64 perThread = 100'000; // how many iterations we will do in each work-item
 //constexpr i64 numThreads = 10'000;
 //constexpr i64 perIteration = perThread * numThreads;
 //constexpr i64 numIterations = N / perIteration;
@@ -170,6 +173,18 @@ static const char* errorToStr(cl_int err)
 	return "[?]";
 }
 
+static i64 multMod(i64 a, i64 b, i64 m)
+{
+	i64 res = 0;
+	while (b) {
+		if (b % 2)
+			res = (res + a) % m;
+		a = 2*a % m;
+		b /= 2;
+	}
+	return res;
+}
+
 // --- CPU implementation single threaded ---
 static i64 calcWithCpu()
 {
@@ -191,7 +206,7 @@ static i64 calcWithCpu()
 
 		i64 n = MIN(i + batch, N);
 		for (; i < n; i++)
-			if ((i64(11) * i) % N == 1)
+			if (multMod(11, i, N) == 1)
 				return i;
 	}
 	assert(false);
@@ -376,6 +391,23 @@ inline size_t aligned(size_t offset, size_t alignment)
 
 static i64 calcWithVulkan()
 {
+#ifndef RENDERDOC
+	RENDERDOC_API_1_4_1* rdoc_api = NULL;
+	if (HINSTANCE mod = GetModuleHandleA("renderdoc.dll"))
+	{
+		printf("Connected to RenderDoc!\n");
+		pRENDERDOC_GetAPI RENDERDOC_GetAPI =
+			(pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+		int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_4_1, (void**)&rdoc_api);
+		assert(ret == 1);
+	}
+
+	if (rdoc_api) {
+		rdoc_api->TriggerCapture();
+		rdoc_api->StartFrameCapture(NULL, NULL);
+	}
+#endif
+
 	constexpr u32 MAX_LAYERS = 32;
 	VkLayerProperties* layersProps = new VkLayerProperties[MAX_LAYERS];
 	// TODO: delete[]
@@ -845,7 +877,13 @@ static i64 calcWithVulkan()
 		}
 	}
 
-	return checkResults();
+	const i64 res = checkResults();
+#ifndef RENDERDOC
+	if (rdoc_api) {
+		rdoc_api->EndFrameCapture(NULL, NULL);
+	}
+#endif
+	return res;
 }
 
 int main()
@@ -855,4 +893,6 @@ int main()
 		//calcWithOpenCl();
 		calcWithVulkan();
 	printf("RESULT: %" PRId64 "\n", res);
+	puts("Press any key to continue...\n");
+	getchar();
 }
